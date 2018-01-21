@@ -25,3 +25,7 @@ output "ami_name" {
 output "xvdb_volume_id" {
   value = "${data.aws_ebs_volume.xvdb.volume_id}"
 }
+
+output "xvdb_snapshot_id" {
+  value = "${data.aws_ebs_volume.xvdb.snapshot_id}"
+}
