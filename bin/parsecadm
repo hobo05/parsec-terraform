@@ -1,31 +1,27 @@
 #!/bin/bash
 
+NODE_TYPE=g2.2xlarge
+INCREASE=0.01
+
 function detect_cheapest {
 
-echo "Detecting the least expensive AZ in your region."
+echo "Detecting the least expensive AZ in your $aws_region."
 
 vpc_id=$(aws --region $aws_region ec2 describe-vpcs | jq '.Vpcs[] | .VpcId + "#\(.IsDefault)"' | sed -e 's/"//g' | grep '#true' | cut -d '#' -f 1)
+reservation_data=($(aws ec2 describe-spot-price-history --instance-types "$NODE_TYPE" --product-descriptions "Windows" --start-time `date +%s` | jq -r '.SpotPriceHistory | map({AvailabilityZone: .AvailabilityZone, SpotPrice: .SpotPrice | tonumber}) | sort_by(.SpotPrice)[0] | to_entries[] | .value'))
+subnet_az=${reservation_data[0]}
+cheapest=${reservation_data[1]}
 
-reservation_data=$(aws --region $aws_region ec2 describe-spot-price-history --instance-types g2.2xlarge --start-time="$(date -v-1d)" --product-description=Windows | jq '.SpotPriceHistory[] | .Timestamp + "#" + .SpotPrice + "#" + .AvailabilityZone' | sed -e 's/"//g' | sort | tail -n 10)
-azs=$(aws --region $aws_region ec2 describe-availability-zones | jq '.AvailabilityZones[] | .ZoneName' | sed -e 's/"//g')
+# Calculate bid price
+BID=$(echo "$cheapest + $INCREASE" | bc)
 
-cheapest="10000000.0"
-cheapest_az=""
+echo "Detected $subnet_az as the least expensive AZ in your $aws_region for $NODE_TYPE spots at \$$cheapest/hr."
+read -p "Do you wish to place a spot request for \$$BID/hr? (yes/no) " yn
+if [ "$yn" != "yes" ]; then
+  echo "Quitting program"
+  exit
+fi
 
-for data in $reservation_data; do
-  if [ -n $(echo $data | grep "$az") ]; then
-    price=$(echo $data | cut -d '#' -f 2)
-    az=$(echo $data | cut -d '#' -f 3)
-    if [ $(bc <<< "$price<$cheapest") == 1 ]; then
-      cheapest=$price
-      cheapest_az=$az
-    fi
-  fi
-done
-
-subnet_id=$(aws --region $aws_region ec2 describe-subnets | jq ' .Subnets[] |  .SubnetId + "#" + .AvailabilityZone' | sed -e 's/"//g' | grep "$cheapest_az" | cut -d '#' -f 1)
-
-echo "Detected $cheapest_az as the least expensive availability zone in your region for g2.2xlarge spots at \$$cheapest/hr."
 }
 
 if ! aws --version &> /dev/null; then
@@ -41,46 +37,58 @@ fi
 case $1 in
 plan)
   aws_region="$2"
+  ami_name="$3"
   detect_cheapest
 
   TF_VAR_aws_vpc=$vpc_id \
-  TF_VAR_aws_subnet=$subnet_id \
+  TF_VAR_aws_subnet_az=$subnet_az \
   TF_VAR_aws_region=$aws_region \
-  TF_VAR_parsec_authcode=$3 \
+  TF_VAR_instance_type="$NODE_TYPE" \
+  TF_VAR_spot_price="$BID" \
+  TF_VAR_ami_name="$ami_name" \
   terraform plan
 
-  echo "To proceed, run \"parsecadm apply <aws region> <parsec token>\""
+  echo "To proceed, run \"parsecadm apply <aws region> <ami name>\""
   ;;
 apply)
-  aws_region=$2
-
+  aws_region="$2"
+  ami_name="$3"
   detect_cheapest
 
   TF_VAR_aws_vpc=$vpc_id \
-  TF_VAR_aws_subnet=$subnet_id \
+  TF_VAR_aws_subnet_az=$subnet_az \
   TF_VAR_aws_region=$aws_region \
-  TF_VAR_parsec_authcode=$3 \
+  TF_VAR_instance_type="$NODE_TYPE" \
+  TF_VAR_spot_price="$BID" \
+  TF_VAR_ami_name="$ami_name" \
   terraform apply
+
+  INSTANCE_ID=$(terraform output instance_id)
+  echo "Waiting for instance $INSTANCE_ID to be ready..."
+  aws ec2 wait instance-status-ok --instance-ids "$INSTANCE_ID"
+  echo "Instance $INSTANCE_ID is ready!!"
   ;;
 destroy)
   TF_VAR_aws_vpc="$(terraform output aws_vpc)" \
-  TF_VAR_aws_subnet="$(terraform output aws_subnet)" \
+  TF_VAR_aws_subnet_az="$(terraform output aws_subnet_az)" \
   TF_VAR_aws_region="$(terraform output aws_region)" \
-  TF_VAR_parsec_authcode="" \
+  TF_VAR_instance_type="$(terraform output instance_type)" \
+  TF_VAR_spot_price="$(terraform output spot_price)" \
+  TF_VAR_ami_name="$(terraform output ami_name)" \
   terraform destroy -force
   ;;
 help)
     cat <<EOF
 Parsec ADM - Automated AWS deployments for Parsec(Unofficial) that automatically find the lowest price in your region.
 
-  plan <aws region> <parsec token>
-    Runs a "terraform plan" with the lowest region zone to show you what you'll build.
+  plan <aws region> <ami name>
+    Runs a "terraform plan" with the cheapest availability zone and shows you what you'll be provisioning.
 
-  apply <aws region> <parsec token>
-    Runs a "terraform apply" to build your server.
+  apply <aws region> <ami name>
+    Runs a "terraform apply" to launch a spot instance from your AMI.
 
   destroy
-    Runs a "terraform destroy -force" to remove all resources.
+    Runs a "terraform destroy -force" to create an AMI from your spot instance and replace your old AMI then remove all resources.
 
 EOF
   ;;

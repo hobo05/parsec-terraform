@@ -1,2 +1,4 @@
 *.tfo
 *.tfstate*
+.terraform
+tfplan
