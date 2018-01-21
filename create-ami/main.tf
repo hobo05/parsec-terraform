@@ -16,13 +16,12 @@ provider "aws" {
 
 resource "null_resource" "delete_ami" {
   provisioner "local-exec" {
-    when    = "destroy"
     command = "delete_ami.sh ${var.ami_name}"
   }
 }
 
 resource "aws_ami_from_instance" "parsec" {
-  name               = "parsec-g2"
+  name               = "${var.ami_name}"
   source_instance_id = "${var.instance_id}"
 
   depends_on = ["null_resource.delete_ami"]

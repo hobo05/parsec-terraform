@@ -8,10 +8,9 @@ Only tested on OSX.
 2. Clone this repo.
 3. [Install Terraform.](https://www.terraform.io/intro/getting-started/install.html)
 4. Ensure you have [aws](https://docs.aws.amazon.com/cli/latest/userguide/installing.html) and [jq](https://stedolan.github.io/jq/download/) installed.
-5. Run `./bin/parsecadm plan <aws region> <ami name>` from the root of the repo to find the cheapest availability zone, calculate a max bid price, and shows you what you'll be provisioning.
-6. Run `./bin/parsecadm apply <aws region> <ami name>` from the root of the repo to to launch a spot instance from your AMI.
-7. Run `./bin/parsecadm destroy` tto create an AMI from your spot instance and replace your old AMI then remove all resources.
+5. Update terraform.tfvars to match your requirements
+6. Run `terraform init` in the root folder and inside the subdirectory `create-ami`
+7. Run `./bin/parsecadm plan` from the root of the repo to find the cheapest availability zone, calculate a max bid price, and shows you what you'll be provisioning.
+8. Run `./bin/parsecadm apply` from the root of the repo to to launch a spot instance from your AMI.
+9. Run `./bin/parsecadm destroy` tto create an AMI from your spot instance and replace your old AMI then remove all resources.
 
-## How to configure it
-
-TBD

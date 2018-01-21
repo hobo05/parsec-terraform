@@ -1,22 +1,25 @@
 #!/bin/bash
 
-NODE_TYPE=g2.2xlarge
-INCREASE=0.01
+set -e
+
+# Load all the Terraform variables as env variables
+set -o allexport
+source "terraform.tfvars"
+set +o allexport
 
 function detect_cheapest {
 
 echo "Detecting the least expensive AZ in your $aws_region."
 
-vpc_id=$(aws --region $aws_region ec2 describe-vpcs | jq '.Vpcs[] | .VpcId + "#\(.IsDefault)"' | sed -e 's/"//g' | grep '#true' | cut -d '#' -f 1)
-reservation_data=($(aws ec2 describe-spot-price-history --instance-types "$NODE_TYPE" --product-descriptions "Windows" --start-time `date +%s` | jq -r '.SpotPriceHistory | map({AvailabilityZone: .AvailabilityZone, SpotPrice: .SpotPrice | tonumber}) | sort_by(.SpotPrice)[0] | to_entries[] | .value'))
+reservation_data=($(aws ec2 describe-spot-price-history --instance-types "$instance_type" --product-descriptions "Windows" --start-time `date +%s` | jq -r '.SpotPriceHistory | map({AvailabilityZone: .AvailabilityZone, SpotPrice: .SpotPrice | tonumber}) | sort_by(.SpotPrice)[0] | to_entries[] | .value'))
 subnet_az=${reservation_data[0]}
 cheapest=${reservation_data[1]}
 
 # Calculate bid price
 BID=$(echo "$cheapest + $INCREASE" | bc)
 
-echo "Detected $subnet_az as the least expensive AZ in your $aws_region for $NODE_TYPE spots at \$$cheapest/hr."
-read -p "Do you wish to place a spot request for \$$BID/hr? (yes/no) " yn
+echo "Detected $subnet_az as the least expensive AZ in your $aws_region for $instance_type spots at \$$cheapest/hr."
+read -p "Do you wish to place a spot request for \$$cheapest/hr + \$$INCREASE/hr = \$$BID/hr? (yes/no) " yn
 if [ "$yn" != "yes" ]; then
   echo "Quitting program"
   exit
@@ -36,31 +39,19 @@ fi
 
 case $1 in
 plan)
-  aws_region="$2"
-  ami_name="$3"
   detect_cheapest
 
-  TF_VAR_aws_vpc=$vpc_id \
   TF_VAR_aws_subnet_az=$subnet_az \
-  TF_VAR_aws_region=$aws_region \
-  TF_VAR_instance_type="$NODE_TYPE" \
   TF_VAR_spot_price="$BID" \
-  TF_VAR_ami_name="$ami_name" \
   terraform plan
 
   echo "To proceed, run \"parsecadm apply <aws region> <ami name>\""
   ;;
 apply)
-  aws_region="$2"
-  ami_name="$3"
   detect_cheapest
 
-  TF_VAR_aws_vpc=$vpc_id \
   TF_VAR_aws_subnet_az=$subnet_az \
-  TF_VAR_aws_region=$aws_region \
-  TF_VAR_instance_type="$NODE_TYPE" \
   TF_VAR_spot_price="$BID" \
-  TF_VAR_ami_name="$ami_name" \
   terraform apply
 
   INSTANCE_ID=$(terraform output instance_id)
@@ -69,22 +60,18 @@ apply)
   echo "Instance $INSTANCE_ID is ready!!"
   ;;
 destroy)
-  TF_VAR_aws_vpc="$(terraform output aws_vpc)" \
   TF_VAR_aws_subnet_az="$(terraform output aws_subnet_az)" \
-  TF_VAR_aws_region="$(terraform output aws_region)" \
-  TF_VAR_instance_type="$(terraform output instance_type)" \
   TF_VAR_spot_price="$(terraform output spot_price)" \
-  TF_VAR_ami_name="$(terraform output ami_name)" \
   terraform destroy -force
   ;;
 help)
     cat <<EOF
 Parsec ADM - Automated AWS deployments for Parsec(Unofficial) that automatically find the lowest price in your region.
 
-  plan <aws region> <ami name>
+  plan 
     Runs a "terraform plan" with the cheapest availability zone and shows you what you'll be provisioning.
 
-  apply <aws region> <ami name>
+  apply 
     Runs a "terraform apply" to launch a spot instance from your AMI.
 
   destroy

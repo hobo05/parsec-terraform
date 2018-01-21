@@ -6,10 +6,6 @@ output "aws_subnet_az" {
   value = "${var.aws_subnet_az}"
 }
 
-output "aws_vpc" {
-  value = "${var.aws_vpc}"
-}
-
 output "instance_type" {
   value = "${var.instance_type}"
 }
@@ -24,4 +20,8 @@ output "instance_id" {
 
 output "ami_name" {
   value = "${var.ami_name}"
+}
+
+output "xvdb_volume_id" {
+  value = "${data.aws_ebs_volume.xvdb.volume_id}"
 }

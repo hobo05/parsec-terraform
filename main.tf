@@ -2,6 +2,10 @@ provider "aws" {
   region = "${var.aws_region}"
 }
 
+data "aws_vpc" "default" {
+  default = true
+}
+
 data "aws_ami" "parsec" {
   most_recent = true
   owners      = ["self"]
@@ -11,13 +15,28 @@ data "aws_ami" "parsec" {
   }
 }
 
+data "aws_ebs_volume" "xvdb" {
+  most_recent = true
+
+  filter {
+    name   = "attachment.instance-id"
+    values = ["${aws_spot_instance_request.parsec.spot_instance_id}"]
+  }
+
+  filter {
+    name   = "attachment.device"
+    values = ["xvdb"]
+  }
+
+}
+
 data "aws_subnet" "cheapest" {
-  vpc_id            = "${var.aws_vpc}"
+  vpc_id            = "${data.aws_vpc.default.id}"
   availability_zone = "${var.aws_subnet_az}"
 }
 
 resource "aws_security_group" "parsec" {
-  vpc_id      = "${var.aws_vpc}"
+  vpc_id      = "${data.aws_vpc.default.id}"
   name        = "parsec"
   description = "Allow inbound Parsec traffic and all outbound."
 
@@ -78,4 +97,13 @@ resource "aws_spot_instance_request" "parsec" {
       when    = "destroy"
       command = "cd create-ami && terraform apply -input=false tfplan"
     }
+
+    depends_on = ["null_resource.delete_volume"]
+}
+
+resource "null_resource" "delete_volume" {
+  provisioner "local-exec" {
+    when    = "destroy"
+    command = "aws ec2 delete-volume --volume-id ${data.aws_ebs_volume.xvdb.volume_id}"
+  }
 }
