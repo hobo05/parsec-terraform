@@ -1,5 +1,5 @@
 # parsec-terraform
-A simple Terraform template and automation tool to build a Parsec Server inside a VPC in AWS in the least expensive availability zone.
+A Terraform template and automation tool to deploy a Parsec Server inside a VPC in AWS in the least expensive availability zone. The idea is to combine the ideas in <https://github.com/davidshrive/aws-ec2-gaming-scripts> and <https://github.com/joshpmcghee/parsec-terraform>. The first repo aimed to use shell scripting to launch spot instances from an existing Parsec AMI that you have already created. Its shutdown script created a new AMI each time from your current instance+volumes so that you wouldn't have to reinstall the games each time your would launch a spot instance. The second repo simplified AWS resource management by using Terraform
 
 Only tested on OSX.
 
