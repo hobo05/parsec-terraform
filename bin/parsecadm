@@ -62,7 +62,25 @@ apply)
 destroy)
   TF_VAR_aws_subnet_az="$(terraform output aws_subnet_az)" \
   TF_VAR_spot_price="$(terraform output spot_price)" \
+  VOLUME_ID=$(terraform output xvdb_volume_id) \
+  SNAPSHOT_ID=$(terraform output xvdb_snapshot_id) \
   terraform destroy -force
+
+  read -p "Delete volume with id $VOLUME_ID? (yes/no) " yn
+  if [ "$yn" != "yes" ]; then
+    echo "Quitting program"
+    exit
+  else
+    aws ec2 delete-volume --volume-id $VOLUME_ID
+  fi
+  
+  read -p "Delete snapshot with id $SNAPSHOT_ID? (yes/no) " yn
+  if [ "$yn" != "yes" ]; then
+    echo "Quitting program"
+    exit
+  else
+    aws ec2 delete-snapshot --snapshot-id $SNAPSHOT_ID
+  fi
   ;;
 help)
     cat <<EOF

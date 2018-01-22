@@ -12,5 +12,6 @@ Only tested on OSX.
 6. Run `terraform init` in the root folder and inside the subdirectory `create-ami`
 7. Run `./bin/parsecadm plan` from the root of the repo to find the cheapest availability zone, calculate a max bid price, and shows you what you'll be provisioning.
 8. Run `./bin/parsecadm apply` from the root of the repo to to launch a spot instance from your AMI.
-9. Run `./bin/parsecadm destroy` tto create an AMI from your spot instance and replace your old AMI then remove all resources.
+9. Before running `./bin/parsecadm destroy` for the first time, delete your existing AMI so that the the new AMI can be created without its name clashing with the existing one. The AMI will be automatically deleted with subsequent calls to destroy as Terraform will keep the last record of the AMI it creates. 
+10. Run `./bin/parsecadm destroy` to create an AMI from your spot instance and replace your old AMI then remove all resources.
 

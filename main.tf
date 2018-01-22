@@ -98,20 +98,6 @@ resource "aws_spot_instance_request" "parsec" {
       command = "cd create-ami && terraform apply -input=false tfplan"
     }
 
-    depends_on = ["null_resource.delete_volume"]
-    depends_on = ["null_resource.delete_snapshot"]
 }
 
-resource "null_resource" "delete_volume" {
-  provisioner "local-exec" {
-    when    = "destroy"
-    command = "aws ec2 delete-volume --volume-id ${data.aws_ebs_volume.xvdb.volume_id}"
-  }
-}
 
-resource "null_resource" "delete_snapshot" {
-  provisioner "local-exec" {
-    when    = "destroy"
-    command = "aws ec2 delete-snapshot --snapshot-id ${data.aws_ebs_volume.xvdb.snapshot_id}"
-  }
-}
