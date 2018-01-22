@@ -17,6 +17,4 @@ provider "aws" {
 resource "aws_ami_from_instance" "parsec" {
   name               = "${var.ami_name}"
   source_instance_id = "${var.instance_id}"
-
-  depends_on = ["null_resource.delete_ami"]
 }
